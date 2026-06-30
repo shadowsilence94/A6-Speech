@@ -276,9 +276,9 @@ def get_openvoice_converter():
     tone_color_converter = ToneColorConverter(f'{ckpt_dir}/converter/config.json', device=dev_str)
     tone_color_converter.load_ckpt(f'{ckpt_dir}/converter/checkpoint.pth')
     
-    # Enable DataParallel if multiple GPUs are available
-    if torch.cuda.is_available() and torch.cuda.device_count() > 1:
-         tone_color_converter.model = nn.DataParallel(tone_color_converter.model)
+    # Enable DataParallel if multiple GPUs are available (disabled for tone color converter to avoid attribute errors on custom sub-modules like ref_enc)
+    # if torch.cuda.is_available() and torch.cuda.device_count() > 1:
+    #      tone_color_converter.model = nn.DataParallel(tone_color_converter.model)
          
     return tone_color_converter, ckpt_dir
 
