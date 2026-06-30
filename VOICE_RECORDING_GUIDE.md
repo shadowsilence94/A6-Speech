@@ -26,7 +26,7 @@ For optimal compatibility with OpenVoice and PyTorch's audio processing backends
 * **Duration**: **10 to 30 seconds** of continuous, clear speech.
   * *Too short* (< 5s) will fail to extract a representative tone color embedding.
   * *Too long* (> 30s) increases VRAM consumption and processing time without improving quality.
-* **Content**: Speak naturally, using your normal pitch, pacing, and volume. Reading a clear sentence or paragraph is ideal.
+* **Content**: Speak naturally, using your normal pitch, pacing, and volume. We have provided a phonetically balanced script in [recording_script.txt](file:///Users/htutkoko/Library/CloudStorage/GoogleDrive-htutkoko1994@gmail.com/My%20Drive/Job%20in%20progress/Deep%20Learning/A6/recording_script.txt) for you to read.
 * **Environment**: Record in a quiet room with minimal background noise, echo, or wind interference. Background hums or noise will be captured by the encoder as part of your "tone color," degrading the quality of the cloned voice.
 
 ---
