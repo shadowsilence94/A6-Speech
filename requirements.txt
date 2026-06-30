@@ -17,5 +17,5 @@ unidic>=1.1.0
 unidic-lite>=1.0.8
 
 # OpenVoice dependencies
-melo-tts
+melo-tts @ git+https://github.com/myshell-ai/MeloTTS.git
 openvoice-cli
