@@ -1,0 +1,10 @@
+# Ignore local datasets, checkpoints and caches
+data/
+__pycache__/
+.DS_Store
+checkpoint/
+*.pt
+*.pth
+*.wav
+*.mp3
+*.m4a
