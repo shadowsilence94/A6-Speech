@@ -1,7 +1,0 @@
-Please read the paragraph below at a natural, steady pace. Do not rush or speak too slowly. 
-
-It should take approximately 15 to 20 seconds to read, which is the ideal duration for the voice cloning model to extract your tone color.
-
----
-
-"Deep learning has completely transformed how computers understand human speech. By converting raw acoustic waves into digital representations, neural networks can now recognize words, transcribe lectures, and clone voices with remarkable accuracy. This recording serves as a reference clip for training my own voice cloning model today."
