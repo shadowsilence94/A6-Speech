@@ -1,5 +1,6 @@
 # Ignore local datasets, checkpoints and caches
-data/
+data/*
+!data/voice_clone/
 __pycache__/
 .DS_Store
 checkpoint/
@@ -8,3 +9,6 @@ checkpoint/
 *.wav
 *.mp3
 *.m4a
+
+# Allow tracking the reference voice recording
+!data/voice_clone/my_voice.wav
