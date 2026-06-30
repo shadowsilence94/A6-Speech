@@ -8,14 +8,16 @@ import torch
 # General Device Configuration
 device = torch.device('cuda' if torch.cuda.is_available() else ('mps' if torch.backends.mps.is_available() else 'cpu'))
 
-# ── 1. CTC Model Implementation & Training ──────────────────────────────────
+# ── 1. CTC Model Implementation & Training (Exercise 2) ─────────────────────
 def run_ctc_training(epochs=300):
     import torch.nn as nn
     import torch.nn.functional as F
     import random
+    import distance  # Used to compute Character Error Rate (CER)
 
     ALPHABET = list('helo wrd')
     CHAR2IDX = {c: i+1 for i, c in enumerate(ALPHABET)}
+    IDX2CHAR = {i+1: c for i, c in enumerate(ALPHABET)}
     VOCAB_SIZE = len(ALPHABET) + 1
     N_MELS = 20
     WORDS = ['hello', 'world', 'hero', 'red', 'led', 'doer']
@@ -29,6 +31,20 @@ def run_ctc_training(epochs=300):
             for _ in range(n):
                 frames.append(base + np.random.randn(N_MELS) * 0.5)
         return np.stack(frames)
+
+    def ctc_greedy_decode(log_probs_seq):
+        # log_probs_seq: numpy array (T, V)
+        argmax_seq = np.argmax(log_probs_seq, axis=-1)
+        # Collapse repeats
+        collapsed = []
+        prev = -1
+        for val in argmax_seq:
+            if val != prev:
+                collapsed.append(val)
+                prev = val
+        # Strip blanks (0)
+        decoded_chars = [IDX2CHAR[val] for val in collapsed if val != 0]
+        return "".join(decoded_chars)
 
     class TinyCTCModel(nn.Module):
         def __init__(self):
@@ -46,13 +62,16 @@ def run_ctc_training(epochs=300):
     ctc_loss_fn = nn.CTCLoss(blank=0, zero_infinity=True)
 
     losses = []
+    cers = []
+    dropped_below_10 = -1
+
     for step in range(epochs):
         word = random.choice(WORDS)
         frames = synthesize_frames(word)
         x = torch.tensor(frames, dtype=torch.float32).unsqueeze(0).to(device)
         targets = torch.tensor([CHAR2IDX[c] for c in word], dtype=torch.long).to(device)
 
-        log_probs = model(x).transpose(0, 1)
+        log_probs = model(x).transpose(0, 1)  # (T, B, V)
         input_lengths  = torch.tensor([log_probs.size(0)]).to(device)
         target_lengths = torch.tensor([len(targets)]).to(device)
 
@@ -62,8 +81,31 @@ def run_ctc_training(epochs=300):
         optimizer.step()
         losses.append(loss.item())
 
+        # Greedy decoding to track CER
+        model.eval()
+        with torch.no_grad():
+            lp = model(x).squeeze(0).cpu().numpy()  # (T, V)
+            decoded = ctc_greedy_decode(lp)
+            # Edit distance / length
+            dist = distance.levenshtein(decoded, word)
+            cer = dist / len(word)
+            cers.append(cer)
+            
+            # Track step when CER drops below 10%
+            if cer < 0.10 and dropped_below_10 == -1:
+                dropped_below_10 = step + 1
+        model.train()
+
         if (step + 1) % 50 == 0 or step == 0:
-            print(f'Step {step+1:3d} | CTC loss: {np.mean(losses[-50:]):.4f}')
+            mean_loss = np.mean(losses[-50:])
+            mean_cer = np.mean(cers[-50:])
+            print(f'Step {step+1:3d} | CTC loss: {mean_loss:.4f} | CER: {mean_cer*100:.1f}%')
+
+    print(f"\nFinal training performance: Loss = {losses[-1]:.4f} | CER = {cers[-1]*100:.1f}%")
+    if dropped_below_10 != -1:
+        print(f"Character Error Rate (CER) dropped below 10% at training step: {dropped_below_10}")
+    else:
+        print("Character Error Rate (CER) did not drop below 10% during training.")
 
     # Save Results
     os.makedirs('results', exist_ok=True)
@@ -78,14 +120,17 @@ def run_ctc_training(epochs=300):
 
     results['ctc_toy_asr_final_loss'] = float(losses[-1])
     results['ctc_toy_asr_mean_loss_last_50'] = float(np.mean(losses[-50:]))
+    results['ctc_toy_asr_final_cer'] = float(cers[-1])
+    results['ctc_toy_asr_cer_dropped_below_10_step'] = int(dropped_below_10)
     with open(results_file, 'w', encoding='utf-8') as f:
         json.dump(results, f, indent=4)
     print(f"CTC training complete. Saved results to {results_file}.")
 
 
-# ── 2. wav2vec 2.0 Feature Extraction & Probing ─────────────────────────────
+# ── 2. wav2vec 2.0 vs Raw Features Linear Probing (Exercise 3) ──────────────
 def run_wav2vec_probe(dataset_name='speechcommands', classes='yes,no,stop,go'):
     import torchaudio
+    import torchaudio.transforms as T
     from sklearn.model_selection import train_test_split
     from sklearn.linear_model import LogisticRegression
     from transformers import Wav2Vec2Processor, Wav2Vec2Model
@@ -114,28 +159,52 @@ def run_wav2vec_probe(dataset_name='speechcommands', classes='yes,no,stop,go'):
         if all(len(v) >= n_per_class for v in by_label.values()):
             break
 
-    # Extract Features
-    print("Extracting frozen wav2vec2 representations...")
-    feats, labels_list = [], []
+    # Extract Features (wav2vec2 vs mel-spectrogram)
+    print("Extracting features (wav2vec2 representations AND raw Mel-Spectrogram)...")
+    mel_transformer = T.MelSpectrogram(sample_rate=16000, n_fft=1024, hop_length=256, n_mels=80)
+    
+    w2v_feats, mel_feats, labels_list = [], [], []
     with torch.no_grad():
         for label, clips in by_label.items():
             for wvf in clips:
-                # Resample if not 16kHz
+                # 1. wav2vec2 features
                 inputs = processor(wvf.squeeze(0).numpy(), sampling_rate=16000, return_tensors='pt').to(device)
                 out = w2v_model(**inputs).last_hidden_state
-                pooled = out.mean(dim=1).squeeze(0).cpu()
-                feats.append(pooled)
+                pooled_w2v = out.mean(dim=1).squeeze(0).cpu()
+                w2v_feats.append(pooled_w2v)
+                
+                # 2. Raw mel-spectrogram features (mean-pooled over time)
+                mel_spec = mel_transformer(wvf)
+                pooled_mel = mel_spec.mean(dim=-1).squeeze(0).cpu()
+                mel_feats.append(pooled_mel)
+
                 labels_list.append(probe_words.index(label))
 
-    X = torch.stack(feats).numpy()
+    X_w2v = torch.stack(w2v_feats).numpy()
+    X_mel = torch.stack(mel_feats).numpy()
     y = np.array(labels_list)
 
-    # Train Linear Probe
-    X_train, X_test, y_train, y_test = train_test_split(X, y, test_size=0.25, random_state=42)
-    clf = LogisticRegression(max_iter=1000)
-    clf.fit(X_train, y_train)
-    acc = clf.score(X_test, y_test)
-    print(f'Linear probe test accuracy: {acc*100:.1f}% (random baseline: {100/len(probe_words):.1f}%)')
+    # 1. Train Linear Probe on wav2vec2
+    print("Training linear probe on wav2vec2 features...")
+    X_train_w, X_test_w, y_train_w, y_test_w = train_test_split(X_w2v, y, test_size=0.25, random_state=42, stratify=y)
+    clf_w2v = LogisticRegression(max_iter=1000)
+    clf_w2v.fit(X_train_w, y_train_w)
+    acc_w2v = clf_w2v.score(X_test_w, y_test_w)
+
+    # 2. Train Linear Probe on Mel-Spectrogram baseline
+    print("Training linear probe on raw Mel-Spectrogram features...")
+    X_train_m, X_test_m, y_train_m, y_test_m = train_test_split(X_mel, y, test_size=0.25, random_state=42, stratify=y)
+    clf_mel = LogisticRegression(max_iter=1000)
+    clf_mel.fit(X_train_m, y_train_m)
+    acc_mel = clf_mel.score(X_test_m, y_test_m)
+
+    print("\n" + "="*50)
+    print("LINEAR PROBE PROFILING REPORT")
+    print("="*50)
+    print(f"Raw Mel-Spectrogram baseline test accuracy: {acc_mel*100:.1f}%")
+    print(f"Frozen wav2vec2 representation test accuracy: {acc_w2v*100:.1f}%")
+    print(f"Performance Gap: +{(acc_w2v - acc_mel)*100:.1f}%")
+    print("="*50)
 
     # Save Results
     os.makedirs('results', exist_ok=True)
@@ -148,13 +217,15 @@ def run_wav2vec_probe(dataset_name='speechcommands', classes='yes,no,stop,go'):
         except Exception:
             pass
 
-    results['wav2vec2_linear_probe_accuracy'] = float(acc)
+    results['wav2vec2_linear_probe_accuracy'] = float(acc_w2v)
+    results['mel_spectrogram_linear_probe_accuracy'] = float(acc_mel)
+    results['feature_extractor_performance_gap'] = float(acc_w2v - acc_mel)
     with open(results_file, 'w', encoding='utf-8') as f:
         json.dump(results, f, indent=4)
     print(f"Linear probing complete. Saved results to {results_file}.")
 
 
-# ── 3. OpenVoice V2 Speaker Identity & Voice Cloning ───────────────────────
+# ── 3. OpenVoice V2 Speaker Identity & Similarity Eval (Exercise 4) ────────
 def get_openvoice_converter():
     from huggingface_hub import snapshot_download
     from openvoice.api import ToneColorConverter
@@ -162,7 +233,6 @@ def get_openvoice_converter():
     print("Loading OpenVoice V2 checkpoints...")
     ckpt_dir = snapshot_download(repo_id='myshell-ai/OpenVoiceV2', local_dir='data/voice_clone/checkpoint', local_dir_use_symlinks=False)
     
-    # We pass the device parameter as string ('cuda', 'mps', or 'cpu')
     dev_str = 'cuda' if torch.cuda.is_available() else ('mps' if torch.backends.mps.is_available() else 'cpu')
     tone_color_converter = ToneColorConverter(f'{ckpt_dir}/converter/config.json', device=dev_str)
     tone_color_converter.load_ckpt(f'{ckpt_dir}/converter/checkpoint.pth')
@@ -201,6 +271,30 @@ def extract_tone_color(reference_file='my_voice.wav'):
         json.dump(results, f, indent=4)
     print("Speaker embedding saved to 'data/voice_clone/processed/' and JSON updated.")
 
+def compute_cosine_similarity(tgt_se_path, generated_wav_path, tone_color_converter):
+    from openvoice import se_extractor
+    
+    try:
+        # Load reference embedding
+        tgt_se = torch.load(tgt_se_path, map_location=device)
+        
+        # Extract embedding from generated voice
+        temp_eval_dir = 'data/voice_clone/processed_eval'
+        os.makedirs(temp_eval_dir, exist_ok=True)
+        gen_se, _ = se_extractor.get_se(
+            generated_wav_path, tone_color_converter, target_dir=temp_eval_dir, vad=True
+        )
+        
+        # Compute Cosine Similarity
+        tgt_flat = tgt_se.view(-1)
+        gen_flat = torch.tensor(gen_se, device=device).view(-1)
+        
+        similarity = torch.nn.functional.cosine_similarity(tgt_flat, gen_flat, dim=0).item()
+        return similarity
+    except Exception as e:
+        print(f"Warning: Could not compute similarity for {generated_wav_path}: {e}")
+        return None
+
 def generate_voice_clone(accent='us', text="I got the job!", language=None):
     from melotts import MeloTTS
 
@@ -221,27 +315,31 @@ def generate_voice_clone(accent='us', text="I got the job!", language=None):
         'au':    ('en-au.pth',    'EN-AU'),
     }
 
-    accents_to_process = []
+    # Setup similarity results container
+    os.makedirs('results', exist_ok=True)
+    results_file = 'results/a6_results.json'
+    results = {}
+    if os.path.exists(results_file):
+        try:
+            with open(results_file, 'r', encoding='utf-8') as f:
+                results = json.load(f)
+        except Exception:
+            pass
+
     if language is not None:
         # Cross-lingual mode
         lang_upper = language.upper()
-        # MeloTTS supports EN, ES, FR, ZH, JP, KR
         print(f"Generating cross-lingual base speech in language: {lang_upper}...")
         base_tts = MeloTTS(language=lang_upper, device=str(device))
         speaker_ids = base_tts.hps.data.spk2id
-        
-        # Select first speaker ID
         spk_id = list(speaker_ids.values())[0]
         temp_wav = 'data/voice_clone/temp_base.wav'
         base_tts.tts_to_file(text, spk_id, temp_wav, speed=1.0)
 
-        # Apply tone color conversion to match reference
         output_wav = f'data/voice_clone/cloned_cross_lingual_{language.lower()}.wav'
         
-        # Load language-specific speaker embedding for cross-lingual mapping
         lang_se_file = f"{ckpt_dir}/base_speakers/ses/{language.lower()}.pth"
         if not os.path.exists(lang_se_file):
-            # Fallback to default EN speaker
             lang_se_file = f"{ckpt_dir}/base_speakers/ses/en-default.pth"
         
         source_se = torch.load(lang_se_file, map_location=device)
@@ -254,8 +352,17 @@ def generate_voice_clone(accent='us', text="I got the job!", language=None):
         if os.path.exists(temp_wav):
             os.remove(temp_wav)
         print(f"Generated cross-lingual cloned voice: {output_wav}")
+        
+        # Compute and record identity similarity
+        sim = compute_cosine_similarity(se_path, output_wav, tone_color_converter)
+        if sim is not None:
+            print(f"Cosine Similarity (Identity preservation): {sim:.4f}")
+            results[f'openvoice_similarity_cross_lingual_{language.lower()}'] = sim
+            with open(results_file, 'w', encoding='utf-8') as f:
+                json.dump(results, f, indent=4)
         return
 
+    accents_to_process = []
     if accent == 'all':
         accents_to_process = list(style_to_se.keys())
     else:
@@ -268,16 +375,12 @@ def generate_voice_clone(accent='us', text="I got the job!", language=None):
         pth_name, spk_key = style_to_se[acc]
         print(f"Generating base speech in style: {spk_key}...")
         
-        # 1. Initialize MeloTTS for English
         base_tts = MeloTTS(language='EN', device=str(device))
         speaker_ids = base_tts.hps.data.spk2id
-        
-        # Select matching speaker ID
         spk_id = speaker_ids[spk_key]
         temp_wav = 'data/voice_clone/temp_base.wav'
         base_tts.tts_to_file(text, spk_id, temp_wav, speed=1.0)
 
-        # 2. Convert tone color to match reference
         output_wav = f'data/voice_clone/cloned_{acc}.wav'
         source_se = torch.load(f'{ckpt_dir}/base_speakers/ses/en-default.pth', map_location=device)
         
@@ -290,6 +393,14 @@ def generate_voice_clone(accent='us', text="I got the job!", language=None):
         if os.path.exists(temp_wav):
             os.remove(temp_wav)
         print(f"Generated expressive cloned voice: {output_wav}")
+
+        # Compute and record identity similarity
+        sim = compute_cosine_similarity(se_path, output_wav, tone_color_converter)
+        if sim is not None:
+            print(f"Cosine Similarity (Identity preservation): {sim:.4f}")
+            results[f'openvoice_similarity_{acc}'] = sim
+            with open(results_file, 'w', encoding='utf-8') as f:
+                json.dump(results, f, indent=4)
 
 
 # ── 4. Main Argument Parser ────────────────────────────────────────────────
