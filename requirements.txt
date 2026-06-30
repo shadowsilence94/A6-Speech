@@ -1,7 +1,5 @@
 # Requirements for A6: Speech Processing
-# Core dependencies
-torch>=2.0
-torchaudio>=2.0
+# Core dependencies (pre-installed on Server/Colab)
 numpy>=1.24
 pandas>=2.0
 scipy>=1.11
