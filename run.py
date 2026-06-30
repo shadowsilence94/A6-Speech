@@ -1,16 +1,47 @@
 import os
 import sys
 import argparse
+
+# Pre-parse the --gpu argument from sys.argv to set environment variables
+# BEFORE any PyTorch context initialization happens.
+gpu_val = None
+for idx, arg in enumerate(sys.argv):
+    if arg == '--gpu' and idx + 1 < len(sys.argv):
+        gpu_val = sys.argv[idx + 1]
+        break
+if gpu_val is not None:
+    os.environ["CUDA_VISIBLE_DEVICES"] = gpu_val
+
+# Now import PyTorch and other libraries
 import json
 import numpy as np
 import torch
+import torch.nn as nn
 
-# General Device Configuration
+# Hardware Diagnostics & Device Selection
 device = torch.device('cuda' if torch.cuda.is_available() else ('mps' if torch.backends.mps.is_available() else 'cpu'))
+
+def print_hardware_diagnostics():
+    print("=" * 60)
+    print("HARDWARE DIAGNOSTICS")
+    print("=" * 60)
+    if torch.cuda.is_available():
+        n_gpus = torch.cuda.device_count()
+        print(f"  Detected {n_gpus} available GPU(s):")
+        for i in range(n_gpus):
+            print(f"    GPU {i}: {torch.cuda.get_device_name(i)}")
+            print(f"      VRAM: {torch.cuda.get_device_properties(i).total_memory / 1e9:.1f} GB")
+        print(f"  CUDA Version: {torch.version.cuda}")
+    elif hasattr(torch.backends, "mps") and torch.backends.mps.is_available():
+        print("  Apple Silicon MPS backend detected for hardware acceleration.")
+    else:
+        print("  CPU-only mode (training will be slow)")
+    print(f"  PyTorch Version: {torch.__version__}")
+    print(f"  Device selected: {device}")
+    print("=" * 60)
 
 # ── 1. CTC Model Implementation & Training (Exercise 2) ─────────────────────
 def run_ctc_training(epochs=300):
-    import torch.nn as nn
     import torch.nn.functional as F
     import random
     import distance  # Used to compute Character Error Rate (CER)
@@ -33,7 +64,6 @@ def run_ctc_training(epochs=300):
         return np.stack(frames)
 
     def ctc_greedy_decode(log_probs_seq):
-        # log_probs_seq: numpy array (T, V)
         argmax_seq = np.argmax(log_probs_seq, axis=-1)
         # Collapse repeats
         collapsed = []
@@ -58,6 +88,12 @@ def run_ctc_training(epochs=300):
 
     print(f"Training TinyCTCModel for {epochs} steps on device: {device}...")
     model = TinyCTCModel().to(device)
+    
+    # Use all available GPUs for training if multi-GPU is active
+    if torch.cuda.is_available() and torch.cuda.device_count() > 1:
+        print(f"Using DataParallel to train across {torch.cuda.device_count()} GPUs!")
+        model = nn.DataParallel(model)
+
     optimizer = torch.optim.Adam(model.parameters(), lr=1e-2)
     ctc_loss_fn = nn.CTCLoss(blank=0, zero_infinity=True)
 
@@ -86,12 +122,10 @@ def run_ctc_training(epochs=300):
         with torch.no_grad():
             lp = model(x).squeeze(0).cpu().numpy()  # (T, V)
             decoded = ctc_greedy_decode(lp)
-            # Edit distance / length
             dist = distance.levenshtein(decoded, word)
             cer = dist / len(word)
             cers.append(cer)
             
-            # Track step when CER drops below 10%
             if cer < 0.10 and dropped_below_10 == -1:
                 dropped_below_10 = step + 1
         model.train()
@@ -143,10 +177,13 @@ def run_wav2vec_probe(dataset_name='speechcommands', classes='yes,no,stop,go'):
     w2v_model = Wav2Vec2Model.from_pretrained("facebook/wav2vec2-base").to(device)
     w2v_model.eval()
 
+    # Use all available GPUs for feature extraction if multi-GPU is active
+    if torch.cuda.is_available() and torch.cuda.device_count() > 1:
+        w2v_model = nn.DataParallel(w2v_model)
+
     print(f"Loading SpeechCommands dataset subset for classes: {probe_words}...")
     os.makedirs('data/speechcommands', exist_ok=True)
     
-    # Check if local cache folder exists
     sc_extracted_path = 'data/speechcommands/SpeechCommands/speech_commands_v0.02'
     download_flag = not os.path.exists(sc_extracted_path)
     sc_dataset = torchaudio.datasets.SPEECHCOMMANDS(root='data/speechcommands', download=download_flag)
@@ -159,7 +196,6 @@ def run_wav2vec_probe(dataset_name='speechcommands', classes='yes,no,stop,go'):
         if all(len(v) >= n_per_class for v in by_label.values()):
             break
 
-    # Extract Features (wav2vec2 vs mel-spectrogram)
     print("Extracting features (wav2vec2 representations AND raw Mel-Spectrogram)...")
     mel_transformer = T.MelSpectrogram(sample_rate=16000, n_fft=1024, hop_length=256, n_mels=80)
     
@@ -169,11 +205,14 @@ def run_wav2vec_probe(dataset_name='speechcommands', classes='yes,no,stop,go'):
             for wvf in clips:
                 # 1. wav2vec2 features
                 inputs = processor(wvf.squeeze(0).numpy(), sampling_rate=16000, return_tensors='pt').to(device)
-                out = w2v_model(**inputs).last_hidden_state
+                if isinstance(w2v_model, nn.DataParallel):
+                    out = w2v_model.module(**inputs).last_hidden_state
+                else:
+                    out = w2v_model(**inputs).last_hidden_state
                 pooled_w2v = out.mean(dim=1).squeeze(0).cpu()
                 w2v_feats.append(pooled_w2v)
                 
-                # 2. Raw mel-spectrogram features (mean-pooled over time)
+                # 2. Raw mel-spectrogram features
                 mel_spec = mel_transformer(wvf)
                 pooled_mel = mel_spec.mean(dim=-1).squeeze(0).cpu()
                 mel_feats.append(pooled_mel)
@@ -236,6 +275,11 @@ def get_openvoice_converter():
     dev_str = 'cuda' if torch.cuda.is_available() else ('mps' if torch.backends.mps.is_available() else 'cpu')
     tone_color_converter = ToneColorConverter(f'{ckpt_dir}/converter/config.json', device=dev_str)
     tone_color_converter.load_ckpt(f'{ckpt_dir}/converter/checkpoint.pth')
+    
+    # Enable DataParallel if multiple GPUs are available
+    if torch.cuda.is_available() and torch.cuda.device_count() > 1:
+         tone_color_converter.model = nn.DataParallel(tone_color_converter.model)
+         
     return tone_color_converter, ckpt_dir
 
 def extract_tone_color(reference_file='my_voice.wav'):
@@ -275,17 +319,13 @@ def compute_cosine_similarity(tgt_se_path, generated_wav_path, tone_color_conver
     from openvoice import se_extractor
     
     try:
-        # Load reference embedding
         tgt_se = torch.load(tgt_se_path, map_location=device)
-        
-        # Extract embedding from generated voice
         temp_eval_dir = 'data/voice_clone/processed_eval'
         os.makedirs(temp_eval_dir, exist_ok=True)
         gen_se, _ = se_extractor.get_se(
             generated_wav_path, tone_color_converter, target_dir=temp_eval_dir, vad=True
         )
         
-        # Compute Cosine Similarity
         tgt_flat = tgt_se.view(-1)
         gen_flat = torch.tensor(gen_se, device=device).view(-1)
         
@@ -307,7 +347,6 @@ def generate_voice_clone(accent='us', text="I got the job!", language=None):
     tone_color_converter, ckpt_dir = get_openvoice_converter()
     target_se = torch.load(se_path, map_location=device)
 
-    # Dictionary mapping accents/styles to check files
     style_to_se = {
         'us':    ('en-us.pth',    'EN-US'),
         'br':    ('en-br.pth',    'EN-BR'),
@@ -315,7 +354,6 @@ def generate_voice_clone(accent='us', text="I got the job!", language=None):
         'au':    ('en-au.pth',    'EN-AU'),
     }
 
-    # Setup similarity results container
     os.makedirs('results', exist_ok=True)
     results_file = 'results/a6_results.json'
     results = {}
@@ -327,7 +365,6 @@ def generate_voice_clone(accent='us', text="I got the job!", language=None):
             pass
 
     if language is not None:
-        # Cross-lingual mode
         lang_upper = language.upper()
         print(f"Generating cross-lingual base speech in language: {lang_upper}...")
         base_tts = MeloTTS(language=lang_upper, device=str(device))
@@ -343,7 +380,13 @@ def generate_voice_clone(accent='us', text="I got the job!", language=None):
             lang_se_file = f"{ckpt_dir}/base_speakers/ses/en-default.pth"
         
         source_se = torch.load(lang_se_file, map_location=device)
-        tone_color_converter.convert(
+        
+        # Unwrap DataParallel to call custom method convert if wrapped
+        converter_model = tone_color_converter
+        if hasattr(tone_color_converter, "module"):
+            converter_model = tone_color_converter.module
+            
+        converter_model.convert(
             model=temp_wav,
             src_se=source_se,
             tgt_se=target_se,
@@ -353,7 +396,6 @@ def generate_voice_clone(accent='us', text="I got the job!", language=None):
             os.remove(temp_wav)
         print(f"Generated cross-lingual cloned voice: {output_wav}")
         
-        # Compute and record identity similarity
         sim = compute_cosine_similarity(se_path, output_wav, tone_color_converter)
         if sim is not None:
             print(f"Cosine Similarity (Identity preservation): {sim:.4f}")
@@ -384,7 +426,11 @@ def generate_voice_clone(accent='us', text="I got the job!", language=None):
         output_wav = f'data/voice_clone/cloned_{acc}.wav'
         source_se = torch.load(f'{ckpt_dir}/base_speakers/ses/en-default.pth', map_location=device)
         
-        tone_color_converter.convert(
+        converter_model = tone_color_converter
+        if hasattr(tone_color_converter, "module"):
+            converter_model = tone_color_converter.module
+            
+        converter_model.convert(
             model=temp_wav,
             src_se=source_se,
             tgt_se=target_se,
@@ -394,7 +440,6 @@ def generate_voice_clone(accent='us', text="I got the job!", language=None):
             os.remove(temp_wav)
         print(f"Generated expressive cloned voice: {output_wav}")
 
-        # Compute and record identity similarity
         sim = compute_cosine_similarity(se_path, output_wav, tone_color_converter)
         if sim is not None:
             print(f"Cosine Similarity (Identity preservation): {sim:.4f}")
@@ -428,8 +473,13 @@ if __name__ == '__main__':
                         help="Language for cross-lingual voice cloning (e.g. es, fr, zh, jp, kr)")
     parser.add_argument('--generate', action='store_true',
                         help="Synthesize cloned voice for selected accent/language")
+    parser.add_argument('--gpu', type=str, default=None,
+                        help="GPU device ID to select (e.g., --gpu 1) for multi-GPU hardware configurations")
 
     args = parser.parse_args()
+
+    # Run diagnostics printout
+    print_hardware_diagnostics()
 
     if args.model == 'ctc':
         if args.train:
