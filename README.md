@@ -38,7 +38,7 @@ The exact results achieved across all exercises are summarized below:
 |---|---|---|---|
 | **Tokenization (Ex 1)** | SpeechTokenizer | Successful (BOS/EOS and Accent tags mapped) | Mapped character vs word token counts (see table below). |
 | **CTC Character Error Rate (Ex 2)** | Toy BiLSTM + CTC | **20.0% CER** (Final Loss: `0.2232`) | CER dropped below 10.0% at Step 78 over 300 training steps. |
-| **wav2vec2 vs Raw-Feature Probe (Ex 3)** | Linear Probe (70/30 split) | **75.0%** (wav2vec2) vs **52.5%** (Mel-Spectrogram) | Large performance gap (+22.5%) validates SSL representations. |
+| **wav2vec2 vs Raw-Feature Probe (Ex 3)** | Linear Probe (70/30 split) | **85.4%** (wav2vec2) vs **64.6%** (Mel-Spectrogram) | Large performance gap (+20.8%) validates SSL representations. |
 | **Voice Cloning (Ex 4)** | OpenVoice V2 | **0.5404** (India) to **0.8786** (FR) Cosine Sim | Successful style-independent timbre and language transfer. |
 
 ---
@@ -76,12 +76,12 @@ In NLP, the `[CLS]` token acts as a global pooling query that collects contextua
 ### Exercise 3: wav2vec 2.0 Representation Learning
 
 #### a) Accuracy Results
-* **wav2vec 2.0 Linear Probe**: **75.0%**
-* **Mel-spectrogram Baseline (mean-pooled)**: **52.5%**
-* **Performance Gap**: **+22.5%** in favor of wav2vec2.
+* **wav2vec 2.0 Linear Probe**: **85.4%**
+* **Mel-spectrogram Baseline (mean-pooled)**: **64.6%**
+* **Performance Gap**: **+20.8%** in favor of wav2vec2.
 
 #### b) Analysis of the Performance Gap
-The large performance gap (+22.5%) exists because raw mel-spectrograms retain substantial high-frequency acoustic noise, speaker identity differences, and variable temporal shifts, making the representation highly non-linear for classification. In contrast, the wav2vec 2.0 encoder has undergone self-supervised pretraining over massive datasets, allowing it to learn speaker-invariant, noise-robust phonemic representations that are linearly separable for semantic classes.
+The large performance gap (+20.8%) exists because raw mel-spectrograms retain substantial high-frequency acoustic noise, speaker identity differences, and variable temporal shifts, making the representation highly non-linear for classification. In contrast, the wav2vec 2.0 encoder has undergone self-supervised pretraining over massive datasets, allowing it to learn speaker-invariant, noise-robust phonemic representations that are linearly separable for semantic classes.
 
 #### c) Contrastive vs. Reconstruction Inductive Biases
 * **Contrastive Pretraining (wav2vec 2.0)**: Encourages the model to distinguish target segments from distractors. This forces the model to ignore low-level noise, phase differences, and speaker specifics, and retain structural phonetic details, transferring exceptionally well to classification tasks.
