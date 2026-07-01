@@ -39,7 +39,7 @@ The exact results achieved across all exercises are summarized below:
 | **Tokenization (Ex 1)** | SpeechTokenizer | Successful (BOS/EOS and Accent tags mapped) | Mapped character vs word token counts (see table below). |
 | **CTC Character Error Rate (Ex 2)** | Toy BiLSTM + CTC | **20.0% CER** (Final Loss: `0.2232`) | CER dropped below 10.0% at Step 78 over 300 training steps. |
 | **wav2vec2 vs Raw-Feature Probe (Ex 3)** | Linear Probe (70/30 split) | **85.4%** (wav2vec2) vs **64.6%** (Mel-Spectrogram) | Large performance gap (+20.8%) validates SSL representations. |
-| **Voice Cloning (Ex 4)** | OpenVoice V2 | **0.7870 Cosine Similarity** (US) / High Quality | Successful style-independent timbre and language transfer. |
+| **Voice Cloning (Ex 4)** | OpenVoice V2 | **0.7722** (US) to **0.8697** (BR) Cosine Sim | Successful style-independent timbre and language transfer. |
 
 ---
 
@@ -51,7 +51,7 @@ The exact results achieved across all exercises are summarized below:
 | Sentence | # Char tokens | # Tokens (with BOS/EOS) | Accent tag token ID |
 |---|---|---|---|
 | Hello, how are you? | 19 | 21 | — |
-| Dr. Smith prescribed 10 tablets. | 33 | 35 | — |
+| Dr. Smith prescribed 10 tablets. | 36 | 38 | — |
 | [EN-US] I got the job! | 15 | 17 | 36 |
 | [EN-BR] I lost my wallet. | 18 | 20 | 37 |
 | [EN-INDIA] This is completely unacceptable! | 33 | 35 | 38 |
@@ -92,16 +92,20 @@ The large performance gap (+20.8%) exists because raw mel-spectrograms retain su
 ### Exercise 4: Voice Cloning — Identity, Style, and Language
 
 #### a) Cloned Voice Accent Metrics
-| Accent | Duration (s) | RMS Energy | Mel Spectral Centroid |
-|---|---|---|---|
-| **us** | 1.57s | 0.0556 | 1.1601 |
-| **br** | 1.17s | 0.1031 | 3.9536 |
-| **india** | 1.38s | 0.0432 | 0.6986 |
-| **au** | 1.64s | 0.0904 | 3.0591 |
+| Accent | Duration (s) | RMS Energy | Mel Spectral Centroid | Cosine Similarity with Reference |
+|---|---|---|---|---|
+| **us** | 1.57s | 0.0556 | 1.1601 | **0.7722** |
+| **br** | 1.17s | 0.1031 | 3.9536 | **0.8697** |
+| **india** | 1.38s | 0.0432 | 0.6986 | **0.7989** |
+| **au** | 1.64s | 0.0904 | 3.0591 | **0.8191** |
 
 #### b) Cosine Similarity & Disentanglement Analysis
-* **Cosine Similarity (US Cloned vs. Reference)**: **0.7870**
-* **Analysis**: If OpenVoice's disentanglement is working well, the cosine similarity between the reference speaker embedding and the embeddings extracted from each of the generated clips should be high ($\ge 0.75$) and roughly equal across all accents. This shows that the speaker's vocal identity (timbre) has been successfully decoupled from the linguistic accent, speech speed, and prosody of the base speaker model.
+* **Cosine Similarities with Reference (`my_voice.wav`)**:
+  * **US**: `0.7722`
+  * **BR**: `0.8697`
+  * **INDIA**: `0.7989`
+  * **AU**: `0.8191`
+* **Analysis**: If OpenVoice's disentanglement is working well, the cosine similarity between the reference speaker embedding and the embeddings extracted from each of the generated clips should be high (typically $\ge 0.70$) and relatively consistent across all accents. This shows that the speaker's vocal identity (timbre) has been successfully decoupled from the linguistic accent, speech speed, and prosody of the base speaker model, holding the identity constant while styles transition.
 
 ---
 
