@@ -1,0 +1,16 @@
+{
+    "ctc_forward_logp": -5.595677538939929,
+    "ctc_forward_prob": 0.0037138821830615867,
+    "ctc_toy_asr_final_loss": 0.22322197258472443,
+    "ctc_toy_asr_mean_loss_last_50": 0.04922161856666207,
+    "openvoice_speaker_embedding_shape": [
+        1,
+        256,
+        1
+    ],
+    "ctc_toy_asr_final_cer": 0.2,
+    "ctc_toy_asr_cer_dropped_below_10_step": 78,
+    "wav2vec2_linear_probe_accuracy": 0.75,
+    "mel_spectrogram_linear_probe_accuracy": 0.525,
+    "feature_extractor_performance_gap": 0.22499999999999998
+}
