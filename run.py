@@ -336,7 +336,7 @@ def compute_cosine_similarity(tgt_se_path, generated_wav_path, tone_color_conver
         return None
 
 def generate_voice_clone(accent='us', text="I got the job!", language=None):
-    from melotts import MeloTTS
+    from melo.api import TTS as MeloTTS
 
     os.makedirs('data/voice_clone', exist_ok=True)
     se_path = 'data/voice_clone/processed/se.pth'
