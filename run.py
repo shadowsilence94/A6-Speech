@@ -298,6 +298,7 @@ def extract_tone_color(reference_file='my_voice.wav'):
         ref_path, tone_color_converter, target_dir='data/voice_clone/processed', vad=True
     )
     print(f"Extracted tone color embedding shape: {target_se.shape}")
+    torch.save(target_se, 'data/voice_clone/processed/se.pth')
     
     # Save Results
     os.makedirs('results', exist_ok=True)
