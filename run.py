@@ -388,7 +388,7 @@ def generate_voice_clone(accent='us', text="I got the job!", language=None):
             converter_model = tone_color_converter.module
             
         converter_model.convert(
-            model=temp_wav,
+            audio_src_path=temp_wav,
             src_se=source_se,
             tgt_se=target_se,
             output_path=output_wav
@@ -432,7 +432,7 @@ def generate_voice_clone(accent='us', text="I got the job!", language=None):
             converter_model = tone_color_converter.module
             
         converter_model.convert(
-            model=temp_wav,
+            audio_src_path=temp_wav,
             src_se=source_se,
             tgt_se=target_se,
             output_path=output_wav
