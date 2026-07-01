@@ -91,7 +91,9 @@ The large performance gap (+20.8%) exists because raw mel-spectrograms retain su
 
 ### Exercise 4: Voice Cloning — Identity, Style, and Language
 
-#### a) Cloned Voice Accent Metrics
+#### a) Cloned Voice Accent & Cross-Lingual Metrics
+
+##### English Accents (Text: "Hello world")
 | Accent | Duration (s) | RMS Energy | Mel Spectral Centroid | Cosine Similarity with Reference |
 |---|---|---|---|---|
 | **us** | 1.57s | 0.0556 | 1.1601 | **0.7722** |
@@ -99,13 +101,18 @@ The large performance gap (+20.8%) exists because raw mel-spectrograms retain su
 | **india** | 1.38s | 0.0432 | 0.6986 | **0.7989** |
 | **au** | 1.64s | 0.0904 | 3.0591 | **0.8191** |
 
+##### Cross-Lingual Clones
+| Language | Text | Duration (s) | Cosine Similarity with Reference |
+|---|---|---|---|
+| **ES** (Spanish) | "Hola, como estas?" | 4.23s | **0.9376** |
+| **FR** (French) | "Bonjour, c'est un test..." | 3.69s | **0.9199** |
+| **EN** (English) | "Hello, this is a test..." | 4.24s | **0.7070** |
+
 #### b) Cosine Similarity & Disentanglement Analysis
 * **Cosine Similarities with Reference (`my_voice.wav`)**:
-  * **US**: `0.7722`
-  * **BR**: `0.8697`
-  * **INDIA**: `0.7989`
-  * **AU**: `0.8191`
-* **Analysis**: If OpenVoice's disentanglement is working well, the cosine similarity between the reference speaker embedding and the embeddings extracted from each of the generated clips should be high (typically $\ge 0.70$) and relatively consistent across all accents. This shows that the speaker's vocal identity (timbre) has been successfully decoupled from the linguistic accent, speech speed, and prosody of the base speaker model, holding the identity constant while styles transition.
+  * **Accents (timbre preservation across regional styles)**: Similarities range between `0.7722` and `0.8697`.
+  * **Cross-Lingual (timbre preservation across different languages)**: Similarities reach as high as `0.9376` (Spanish) and `0.9199` (French).
+* **Analysis**: If OpenVoice's disentanglement is working well, the cosine similarity between the reference speaker embedding and the embeddings extracted from each of the generated clips should be high (typically $\ge 0.70$) and relatively consistent across all accents. This shows that the speaker's vocal identity (timbre) has been successfully decoupled from the linguistic accent, speech speed, and prosody of the base speaker model, holding the identity constant while styles transition. Our results verify this decoupled behavior across both accent and cross-lingual transfers.
 
 ---
 
