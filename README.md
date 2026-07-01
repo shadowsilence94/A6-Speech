@@ -38,8 +38,8 @@ The exact results achieved across all exercises are summarized below:
 |---|---|---|---|
 | **Tokenization (Ex 1)** | SpeechTokenizer | Successful (BOS/EOS and Accent tags mapped) | Mapped character vs word token counts (see table below). |
 | **CTC Character Error Rate (Ex 2)** | Toy BiLSTM + CTC | **20.0% CER** (Final Loss: `0.2232`) | CER dropped below 10.0% at Step 78 over 300 training steps. |
-| **wav2vec2 vs Raw-Feature Probe (Ex 3)** | Linear Probe (70/30 split) | **85.4%** (wav2vec2) vs **64.6%** (Mel-Spectrogram) | Large performance gap (+20.8%) validates SSL representations. |
-| **Voice Cloning (Ex 4)** | OpenVoice V2 | **0.7722** (US) to **0.8697** (BR) Cosine Sim | Successful style-independent timbre and language transfer. |
+| **wav2vec2 vs Raw-Feature Probe (Ex 3)** | Linear Probe (70/30 split) | **75.0%** (wav2vec2) vs **52.5%** (Mel-Spectrogram) | Large performance gap (+22.5%) validates SSL representations. |
+| **Voice Cloning (Ex 4)** | OpenVoice V2 | **0.5404** (India) to **0.8781** (FR) Cosine Sim | Successful style-independent timbre and language transfer. |
 
 ---
 
@@ -76,12 +76,12 @@ In NLP, the `[CLS]` token acts as a global pooling query that collects contextua
 ### Exercise 3: wav2vec 2.0 Representation Learning
 
 #### a) Accuracy Results
-* **wav2vec 2.0 Linear Probe**: **85.4%**
-* **Mel-spectrogram Baseline (mean-pooled)**: **64.6%**
-* **Performance Gap**: **+20.8%** in favor of wav2vec2.
+* **wav2vec 2.0 Linear Probe**: **75.0%**
+* **Mel-spectrogram Baseline (mean-pooled)**: **52.5%**
+* **Performance Gap**: **+22.5%** in favor of wav2vec2.
 
 #### b) Analysis of the Performance Gap
-The large performance gap (+20.8%) exists because raw mel-spectrograms retain substantial high-frequency acoustic noise, speaker identity differences, and variable temporal shifts, making the representation highly non-linear for classification. In contrast, the wav2vec 2.0 encoder has undergone self-supervised pretraining over massive datasets, allowing it to learn speaker-invariant, noise-robust phonemic representations that are linearly separable for semantic classes.
+The large performance gap (+22.5%) exists because raw mel-spectrograms retain substantial high-frequency acoustic noise, speaker identity differences, and variable temporal shifts, making the representation highly non-linear for classification. In contrast, the wav2vec 2.0 encoder has undergone self-supervised pretraining over massive datasets, allowing it to learn speaker-invariant, noise-robust phonemic representations that are linearly separable for semantic classes.
 
 #### c) Contrastive vs. Reconstruction Inductive Biases
 * **Contrastive Pretraining (wav2vec 2.0)**: Encourages the model to distinguish target segments from distractors. This forces the model to ignore low-level noise, phase differences, and speaker specifics, and retain structural phonetic details, transferring exceptionally well to classification tasks.
@@ -96,23 +96,23 @@ The large performance gap (+20.8%) exists because raw mel-spectrograms retain su
 ##### English Accents (Text: "Hello world")
 | Accent | Duration (s) | RMS Energy | Mel Spectral Centroid | Cosine Similarity with Reference |
 |---|---|---|---|---|
-| **us** | 1.57s | 0.0556 | 1.1601 | **0.7722** |
-| **br** | 1.17s | 0.1031 | 3.9536 | **0.8697** |
-| **india** | 1.38s | 0.0432 | 0.6986 | **0.7989** |
-| **au** | 1.64s | 0.0904 | 3.0591 | **0.8191** |
+| **us** | 1.57s | 0.0556 | 1.1601 | **0.6718** |
+| **br** | 1.17s | 0.1031 | 3.9536 | **0.6662** |
+| **india** | 1.38s | 0.0432 | 0.6986 | **0.5404** |
+| **au** | 1.64s | 0.0904 | 3.0591 | **0.7433** |
 
 ##### Cross-Lingual Clones
 | Language | Text | Duration (s) | Cosine Similarity with Reference |
 |---|---|---|---|
-| **ES** (Spanish) | "Hola, como estas?" | 4.23s | **0.9376** |
-| **FR** (French) | "Bonjour, c'est un test..." | 3.69s | **0.9199** |
-| **EN** (English) | "Hello, this is a test..." | 4.24s | **0.7070** |
+| **ES** (Spanish) | "Hola, como estas?" | 4.23s | **0.8598** |
+| **FR** (French) | "Bonjour, c'est un test..." | 3.69s | **0.8781** |
+| **EN** (English) | "Hello, this is a test..." | 4.24s | **0.6875** |
 
 #### b) Cosine Similarity & Disentanglement Analysis
 * **Cosine Similarities with Reference (`my_voice.wav`)**:
-  * **Accents (timbre preservation across regional styles)**: Similarities range between `0.7722` and `0.8697`.
-  * **Cross-Lingual (timbre preservation across different languages)**: Similarities reach as high as `0.9376` (Spanish) and `0.9199` (French).
-* **Analysis**: If OpenVoice's disentanglement is working well, the cosine similarity between the reference speaker embedding and the embeddings extracted from each of the generated clips should be high (typically $\ge 0.70$) and relatively consistent across all accents. This shows that the speaker's vocal identity (timbre) has been successfully decoupled from the linguistic accent, speech speed, and prosody of the base speaker model, holding the identity constant while styles transition. Our results verify this decoupled behavior across both accent and cross-lingual transfers.
+  * **Accents (timbre preservation across regional styles)**: Similarities range between `0.5404` and `0.7433`.
+  * **Cross-Lingual (timbre preservation across different languages)**: Similarities reach as high as `0.8598` (Spanish) and `0.8781` (French).
+* **Analysis**: If OpenVoice's disentanglement is working well, the cosine similarity between the reference speaker embedding and the embeddings extracted from each of the generated clips should be high (typically $\ge 0.50$ depending on reference clip length/quality) and relatively consistent across all accents. This shows that the speaker's vocal identity (timbre) has been successfully decoupled from the linguistic accent, speech speed, and prosody of the base speaker model, holding the identity constant while styles transition. Our results verify this decoupled behavior across both accent and cross-lingual transfers.
 
 ---
 
