@@ -39,7 +39,7 @@ The exact results achieved across all exercises are summarized below:
 | **Tokenization (Ex 1)** | SpeechTokenizer | Successful (BOS/EOS and Accent tags mapped) | Mapped character vs word token counts (see table below). |
 | **CTC Character Error Rate (Ex 2)** | Toy BiLSTM + CTC | **20.0% CER** (Final Loss: `0.2232`) | CER dropped below 10.0% at Step 78 over 300 training steps. |
 | **wav2vec2 vs Raw-Feature Probe (Ex 3)** | Linear Probe (70/30 split) | **75.0%** (wav2vec2) vs **52.5%** (Mel-Spectrogram) | Large performance gap (+22.5%) validates SSL representations. |
-| **Voice Cloning (Ex 4)** | OpenVoice V2 | **0.5404** (India) to **0.8781** (FR) Cosine Sim | Successful style-independent timbre and language transfer. |
+| **Voice Cloning (Ex 4)** | OpenVoice V2 | **0.5404** (India) to **0.8786** (FR) Cosine Sim | Successful style-independent timbre and language transfer. |
 
 ---
 
@@ -93,25 +93,25 @@ The large performance gap (+22.5%) exists because raw mel-spectrograms retain su
 
 #### a) Cloned Voice Accent & Cross-Lingual Metrics
 
-##### English Accents (Text: "Hello world")
+##### English Accents (Text: recording_script.txt paragraph)
 | Accent | Duration (s) | RMS Energy | Mel Spectral Centroid | Cosine Similarity with Reference |
 |---|---|---|---|---|
-| **us** | 1.57s | 0.0556 | 1.1601 | **0.6718** |
-| **br** | 1.17s | 0.1031 | 3.9536 | **0.6662** |
-| **india** | 1.38s | 0.0432 | 0.6986 | **0.5404** |
-| **au** | 1.64s | 0.0904 | 3.0591 | **0.7433** |
+| **us** | 20.79s | 0.0359 | 0.4791 | **0.7611** |
+| **br** | 19.59s | 0.0513 | 0.9855 | **0.7357** |
+| **india** | 19.92s | 0.0297 | 0.3304 | **0.6443** |
+| **au** | 20.46s | 0.0636 | 1.5270 | **0.7580** |
 
 ##### Cross-Lingual Clones
-| Language | Text | Duration (s) | Cosine Similarity with Reference |
-|---|---|---|---|
-| **ES** (Spanish) | "Hola, como estas?" | 4.23s | **0.8598** |
-| **FR** (French) | "Bonjour, c'est un test..." | 3.69s | **0.8781** |
-| **EN** (English) | "Hello, this is a test..." | 4.24s | **0.6875** |
+| Language | Text | Duration (s) | RMS Energy | Mel Spectral Centroid | Cosine Similarity with Reference |
+|---|---|---|---|---|---|
+| **ES** (Spanish) | "Hola, esta es una prueba..." | 4.32s | 0.0698 | 1.8200 | **0.8507** |
+| **FR** (French) | "Bonjour, ceci est un test..." | 3.77s | 0.0590 | 1.3378 | **0.8786** |
+| **EN** (English) | "Hello, this is a test..." | 4.38s | 0.0499 | 0.9330 | **0.6932** |
 
 #### b) Cosine Similarity & Disentanglement Analysis
-* **Cosine Similarities with Reference (`my_voice.wav`)**:
-  * **Accents (timbre preservation across regional styles)**: Similarities range between `0.5404` and `0.7433`.
-  * **Cross-Lingual (timbre preservation across different languages)**: Similarities reach as high as `0.8598` (Spanish) and `0.8781` (French).
+* **Cosine Similarities with Reference (`my_voice.wav`, ~27.5s recording)**:
+  * **Accents (timbre preservation across regional styles)**: Similarities range between `0.6443` and `0.7611`.
+  * **Cross-Lingual (timbre preservation across different languages)**: Similarities reach as high as `0.8507` (Spanish) and `0.8786` (French).
 * **Analysis**: If OpenVoice's disentanglement is working well, the cosine similarity between the reference speaker embedding and the embeddings extracted from each of the generated clips should be high (typically $\ge 0.50$ depending on reference clip length/quality) and relatively consistent across all accents. This shows that the speaker's vocal identity (timbre) has been successfully decoupled from the linguistic accent, speech speed, and prosody of the base speaker model, holding the identity constant while styles transition. Our results verify this decoupled behavior across both accent and cross-lingual transfers.
 
 ---
